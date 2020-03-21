@@ -152,13 +152,13 @@ impl StreamRef
 		unsafe { base::pa_stream_disconnect(self.0); }
 	}
 
-	pub fn set_write_request_callback<W>(&mut self, handler: &mut W) where W: WriteRequestHandler
+	pub fn set_write_request_callback<W>(&mut self, handler: Pin<&mut W>) where W: WriteRequestHandler + Unpin
 	{
 		extern "C" fn wcb_wrap<W>(sref: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where W: WriteRequestHandler
 		{
 			unsafe { (*(ctx as *mut W)).callback(&StreamRef(sref), nbytes); }
 		}
-		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler as *mut W as _) }
+		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_mut() as *mut W as _) }
 	}
 }
 
