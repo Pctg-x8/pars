@@ -2,7 +2,7 @@
 use crate::ffi as base;
 use std::ptr::{NonNull, null, null_mut};
 use std::mem::transmute;
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::task::{Context, Poll, Waker};
 use std::pin::Pin;
@@ -93,6 +93,11 @@ impl Stream
 	{
 		let mut current_st = self.state();
 		while current_st != state { current_st = self.await_new_state().await; }
+	}
+
+	pub fn device_name(&self) -> &str
+	{
+		unsafe { CStr::from_ptr(base::pa_stream_get_device_name(self.0.as_ptr())).to_str().unwrap() }
 	}
 
 	pub fn connect_playback(&mut self, dev: Option<&str>, attr: Option<&BufferAttr>, flags: Flags, volume: Option<&CVolume>, sync_stream: Option<&mut Stream>) -> Result<(), isize>
