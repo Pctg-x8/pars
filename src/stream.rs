@@ -6,6 +6,7 @@ use std::ffi::CString;
 use super::{SampleSpec, ChannelMap};
 
 #[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum State
 {
 	Unconnected = base::PA_STREAM_UNCONNECTED as _,
