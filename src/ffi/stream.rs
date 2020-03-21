@@ -1,8 +1,11 @@
 
-use libc::{c_char, c_int};
+use libc::{c_char, c_int, size_t, c_void};
 use super::{pa_context, pa_sample_spec, pa_channel_map, PA_CHANNELS_MAX};
 
 pub enum pa_stream {}
+
+pub type pa_stream_request_cb_t = extern "C" fn(p: *mut pa_stream, nbytes: size_t, userdata: *mut c_void);
+pub type pa_stream_notify_cb_t = extern "C" fn(p: *mut pa_stream, userdata: *mut c_void);
 
 pub type pa_stream_state_t = i32;
 pub const PA_STREAM_UNCONNECTED: pa_stream_state_t = 0;
@@ -66,4 +69,7 @@ extern "C"
 	pub fn pa_stream_get_device_name(s: *const pa_stream) -> *const c_char;
 	pub fn pa_stream_connect_playback(s: *mut pa_stream, dev: *const c_char, attr: *const pa_buffer_attr, flags: pa_stream_flags_t, volume: *const pa_cvolume, sync_stream: *mut pa_stream) -> c_int;
 	pub fn pa_stream_disconnect(s: *mut pa_stream);
+
+	pub fn pa_stream_set_state_callback(p: *mut pa_stream, cb: Option<pa_stream_notify_cb_t>, userdata: *mut c_void);
+	pub fn pa_stream_set_write_callback(p: *mut pa_stream, cb: Option<pa_stream_request_cb_t>, userdata: *mut c_void);
 }

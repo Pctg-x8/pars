@@ -3,7 +3,11 @@ use crate::ffi as base;
 use std::ptr::{NonNull, null, null_mut};
 use std::mem::transmute;
 use std::ffi::CString;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::task::{Context, Poll, Waker};
+use std::pin::Pin;
 use super::{SampleSpec, ChannelMap};
+use libc::c_void;
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -76,6 +80,20 @@ impl Stream
 	{
 		unsafe { transmute(base::pa_stream_get_state(self.0.as_ptr())) }
 	}
+	pub fn await_new_state(&mut self) -> StreamStateChangeAwaiter
+	{
+		StreamStateChangeAwaiter
+		{
+			s: self,
+			changed: Arc::new(AtomicBool::new(false)),
+			callback_context: None
+		}
+	}
+	pub async fn await_state_until(&mut self, state: State)
+	{
+		let mut current_st = self.state();
+		while current_st != state { current_st = self.await_new_state().await; }
+	}
 
 	pub fn connect_playback(&mut self, dev: Option<&str>, attr: Option<&BufferAttr>, flags: Flags, volume: Option<&CVolume>, sync_stream: Option<&mut Stream>) -> Result<(), isize>
 	{
@@ -90,5 +108,50 @@ impl Stream
 				sync_stream.map(|p| p.0.as_ptr()).unwrap_or_else(null_mut))
 		};
 		if r == 0 { Ok(()) } else { Err(r as isize) }
+	}
+	pub fn disconnect(&mut self)
+	{
+		unsafe { base::pa_stream_disconnect(self.0.as_ptr()); }
+	}
+}
+
+struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }
+pub struct StreamStateChangeAwaiter<'a>
+{
+	s: &'a mut Stream,
+	changed: Arc<AtomicBool>,
+	callback_context: Option<Pin<Box<CallbackContext>>>
+}
+impl<'a> std::future::Future for StreamStateChangeAwaiter<'a>
+{
+	type Output = State;
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<State>
+	{
+		if !self.changed.load(Ordering::Acquire)
+		{
+			let cbc = Box::pin(CallbackContext
+			{
+				mux: Some(cx.waker().clone()),
+				flag: self.changed.clone()
+			});
+			extern "C" fn cb_internal(_: *mut base::pa_stream, ctx: *mut c_void)
+			{
+				let cbc = unsafe { &mut *(ctx as *mut CallbackContext) };
+				cbc.flag.store(true, Ordering::Release);
+				cbc.mux.take().unwrap().wake();
+			}
+			unsafe
+			{
+				base::pa_stream_set_state_callback(self.s.0.as_ptr(), Some(cb_internal), &*cbc as *const _ as *mut _);
+			}
+			self.get_mut().callback_context = Some(cbc);
+
+			Poll::Pending
+		}
+		else
+		{
+			unsafe { base::pa_stream_set_state_callback(self.s.0.as_ptr(), None, null_mut()); }
+			Poll::Ready(self.s.state())
+		}
 	}
 }
