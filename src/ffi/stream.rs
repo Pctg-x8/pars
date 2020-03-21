@@ -70,6 +70,9 @@ extern "C"
 	pub fn pa_stream_connect_playback(s: *mut pa_stream, dev: *const c_char, attr: *const pa_buffer_attr, flags: pa_stream_flags_t, volume: *const pa_cvolume, sync_stream: *mut pa_stream) -> c_int;
 	pub fn pa_stream_disconnect(s: *mut pa_stream);
 
+	pub fn pa_stream_is_suspended(s: *const pa_stream) -> c_int;
+	pub fn pa_stream_is_corked(s: *const pa_stream) -> c_int;
+
 	pub fn pa_stream_set_state_callback(p: *mut pa_stream, cb: Option<pa_stream_notify_cb_t>, userdata: *mut c_void);
 	pub fn pa_stream_set_write_callback(p: *mut pa_stream, cb: Option<pa_stream_request_cb_t>, userdata: *mut c_void);
 }

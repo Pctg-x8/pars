@@ -99,6 +99,16 @@ impl Stream
 	{
 		unsafe { CStr::from_ptr(base::pa_stream_get_device_name(self.0.as_ptr())).to_str().unwrap() }
 	}
+	pub fn is_suspended(&self) -> Result<bool, isize>
+	{
+		let r = unsafe { base::pa_stream_is_suspended(self.0.as_ptr()) };
+		if r < 0 { Err(r as _) } else { Ok(r == 1) }
+	}
+	pub fn is_corked(&self) -> Result<bool, isize>
+	{
+		let r = unsafe { base::pa_stream_is_corked(self.0.as_ptr()) };
+		if r < 0 { Err(r as _) } else { Ok(r == 1) }
+	}
 
 	pub fn connect_playback(&mut self, dev: Option<&str>, attr: Option<&BufferAttr>, flags: Flags, volume: Option<&CVolume>, sync_stream: Option<&mut Stream>) -> Result<(), isize>
 	{
