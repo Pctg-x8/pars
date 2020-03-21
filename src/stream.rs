@@ -162,7 +162,7 @@ impl StreamRef
 	{
 		extern "C" fn wcb_wrap<W>(sref: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where W: WriteRequestHandler
 		{
-			unsafe { (*(ctx as *mut W)).callback(&StreamRef(sref), nbytes); }
+			unsafe { (*(ctx as *mut W)).callback(&mut StreamRef(sref), nbytes); }
 		}
 		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_mut() as *mut W as _) }
 	}
@@ -196,7 +196,7 @@ impl StreamRef
 
 pub trait WriteRequestHandler
 {
-	fn callback(&mut self, stream: &StreamRef, nbytes: usize);
+	fn callback(&mut self, stream: &mut StreamRef, nbytes: usize);
 }
 
 struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }
