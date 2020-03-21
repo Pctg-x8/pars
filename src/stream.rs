@@ -1,7 +1,7 @@
 
 use crate::ffi as base;
 use std::ptr::{NonNull, null, null_mut};
-use std::mem::transmute;
+use std::mem::{transmute, MaybeUninit};
 use std::ffi::{CString, CStr};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::task::{Context, Poll, Waker};
@@ -27,7 +27,7 @@ pub const INTERPOLATE_TIMING: Flags = base::PA_STREAM_INTERPOLATE_TIMING;
 pub const NOT_MONOTONIC: Flags = base::PA_STREAM_NOT_MONOTONIC;
 pub const AUTO_TIMING_UPDATE: Flags = base::PA_STREAM_AUTO_TIMING_UPDATE;
 pub const NO_REMAP_CHANNELS: Flags = base::PA_STREAM_NO_REMAP_CHANNELS;
-pub const NO_REMIX_CHANNELS: Flags = base::PA_STREAM_NO_REMAP_CHANNELS;
+pub const NO_REMIX_CHANNELS: Flags = base::PA_STREAM_NO_REMIX_CHANNELS;
 pub const FIX_FORMAT: Flags = base::PA_STREAM_FIX_FORMAT;
 pub const FIX_RATE: Flags = base::PA_STREAM_FIX_RATE;
 pub const FIX_CHANNELS: Flags = base::PA_STREAM_FIX_CHANNELS;
@@ -45,6 +45,12 @@ pub const PASSTHROUGH: Flags = base::PA_STREAM_PASSTHROUGH;
 
 pub type BufferAttr = base::pa_buffer_attr;
 pub type CVolume = base::pa_cvolume;
+
+pub type SeekMode = base::pa_seek_mode_t;
+pub const SEEK_RELATIVE: SeekMode = base::PA_SEEK_RELATIVE;
+pub const SEEK_ABSOLUTE: SeekMode = base::PA_SEEK_ABSOLUTE;
+pub const SEEK_RELATIVE_ON_READ: SeekMode = base::PA_SEEK_RELATIVE_ON_READ;
+pub const SEEK_RELATIVE_END: SeekMode = base::PA_SEEK_RELATIVE_END;
 
 pub struct StreamRef(*mut base::pa_stream);
 pub struct Stream(NonNull<base::pa_stream>);
@@ -159,6 +165,32 @@ impl StreamRef
 			unsafe { (*(ctx as *mut W)).callback(&StreamRef(sref), nbytes); }
 		}
 		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_mut() as *mut W as _) }
+	}
+	pub fn begin_write(&mut self) -> Result<(&mut [u8], usize), isize>
+	{
+		let (mut buffer, mut nbytes) = (MaybeUninit::uninit(), MaybeUninit::uninit());
+		let r = unsafe { base::pa_stream_begin_write(self.0, buffer.as_mut_ptr(), nbytes.as_mut_ptr()) };
+		if r != 0 { Err(r as _) }
+		else
+		{
+			let len: libc::size_t = unsafe { nbytes.assume_init() };
+			let buf_u8 = unsafe { std::slice::from_raw_parts_mut(buffer.assume_init() as *mut u8, len as usize) };
+			Ok((buf_u8, len))
+		}
+	}
+	pub fn cancel_write(&mut self) -> Result<(), isize>
+	{
+		let r = unsafe { base::pa_stream_cancel_write(self.0) };
+		if r != 0 { Err(r as _) } else { Ok(()) }
+	}
+	pub fn write_slice<D>(&mut self, data: &[D], seek_offset: Option<(SeekMode, i64)>) -> Result<(), isize>
+	{
+		let (seek, offset) = seek_offset.unwrap_or((0, 0));
+		let r = unsafe
+		{
+			base::pa_stream_write(self.0, data.as_ptr() as *const _, data.len() as _, None, offset, seek)
+		};
+		if r != 0 { Err(r as _) } else { Ok(()) }
 	}
 }
 

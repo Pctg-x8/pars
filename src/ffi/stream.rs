@@ -1,6 +1,6 @@
 
 use libc::{c_char, c_int, size_t, c_void};
-use super::{pa_context, pa_sample_spec, pa_channel_map, PA_CHANNELS_MAX};
+use super::{pa_context, pa_sample_spec, pa_channel_map, PA_CHANNELS_MAX, pa_free_cb_t, pa_seek_mode_t};
 
 pub enum pa_stream {}
 
@@ -75,4 +75,8 @@ extern "C"
 
 	pub fn pa_stream_set_state_callback(p: *mut pa_stream, cb: Option<pa_stream_notify_cb_t>, userdata: *mut c_void);
 	pub fn pa_stream_set_write_callback(p: *mut pa_stream, cb: Option<pa_stream_request_cb_t>, userdata: *mut c_void);
+
+	pub fn pa_stream_begin_write(p: *mut pa_stream, data: *mut *mut c_void, nbytes: *mut size_t) -> c_int;
+	pub fn pa_stream_cancel_write(p: *mut pa_stream) -> c_int;
+	pub fn pa_stream_write(p: *mut pa_stream, data: *const c_void, nbytes: size_t, free_cb: Option<pa_free_cb_t>, offset: i64, seek: pa_seek_mode_t) -> c_int;
 }
