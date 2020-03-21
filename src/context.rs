@@ -80,7 +80,8 @@ impl Context
 		ContextStateChangeAwaiter
 		{
 			c: self,
-			changed: Arc::new(AtomicBool::new(false))
+			changed: Arc::new(AtomicBool::new(false)),
+			callback_context: None
 		}
 	}
 	pub async fn await_state_until(&mut self, state: State)
@@ -104,10 +105,12 @@ impl Context
 	}
 }
 
+struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }
 pub struct ContextStateChangeAwaiter<'a>
 {
 	c: &'a mut Context,
-	changed: Arc<AtomicBool>
+	changed: Arc<AtomicBool>,
+	callback_context: Option<Pin<Box<CallbackContext>>>
 }
 impl<'a> std::future::Future for ContextStateChangeAwaiter<'a>
 {
@@ -116,7 +119,6 @@ impl<'a> std::future::Future for ContextStateChangeAwaiter<'a>
 	{
 		if !self.changed.load(Ordering::Acquire)
 		{
-			struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }
 			let cbc = Box::pin(CallbackContext
 			{
 				mux: Some(cx.waker().clone()),
@@ -130,8 +132,9 @@ impl<'a> std::future::Future for ContextStateChangeAwaiter<'a>
 			}
 			unsafe
 			{
-				base::pa_context_set_state_callback(self.c.0.as_ptr(), Some(cb_internal), &*cbc as *const _ as  *mut _);
+				base::pa_context_set_state_callback(self.c.0.as_ptr(), Some(cb_internal), &*cbc as *const _ as *mut _);
 			}
+			self.get_mut().callback_context = Some(cbc);
 
 			Poll::Pending
 		}
