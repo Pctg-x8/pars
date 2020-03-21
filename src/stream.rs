@@ -46,12 +46,35 @@ pub const PASSTHROUGH: Flags = base::PA_STREAM_PASSTHROUGH;
 pub type BufferAttr = base::pa_buffer_attr;
 pub type CVolume = base::pa_cvolume;
 
+pub struct StreamRef(*mut base::pa_stream);
 pub struct Stream(NonNull<base::pa_stream>);
+impl std::ops::Deref for Stream
+{
+	type Target = StreamRef;
+	fn deref(&self) -> &StreamRef { unsafe { transmute(self) } }
+}
+impl std::ops::DerefMut for Stream
+{
+	fn deref_mut(&mut self) -> &mut StreamRef { unsafe { transmute(self) } }
+}
 impl Clone for Stream
 {
 	fn clone(&self) -> Self
 	{
 		Self(unsafe { NonNull::new_unchecked(base::pa_stream_ref(self.0.as_ptr())) })
+	}
+}
+impl std::borrow::Borrow<StreamRef> for Stream
+{
+	fn borrow(&self) -> &StreamRef { std::ops::Deref::deref(self) }
+}
+impl ToOwned for StreamRef
+{
+	type Owned = Stream;
+
+	fn to_owned(&self) -> Stream
+	{
+		Stream(unsafe { NonNull::new_unchecked(base::pa_stream_ref(self.0)) })
 	}
 }
 impl Drop for Stream
@@ -74,11 +97,11 @@ impl super::Context
 		NonNull::new(p).map(Stream)
 	}
 }
-impl Stream
+impl StreamRef
 {
 	pub fn state(&self) -> State
 	{
-		unsafe { transmute(base::pa_stream_get_state(self.0.as_ptr())) }
+		unsafe { transmute(base::pa_stream_get_state(self.0)) }
 	}
 	pub fn await_new_state(&mut self) -> StreamStateChangeAwaiter
 	{
@@ -97,16 +120,16 @@ impl Stream
 
 	pub fn device_name(&self) -> &str
 	{
-		unsafe { CStr::from_ptr(base::pa_stream_get_device_name(self.0.as_ptr())).to_str().unwrap() }
+		unsafe { CStr::from_ptr(base::pa_stream_get_device_name(self.0)).to_str().unwrap() }
 	}
 	pub fn is_suspended(&self) -> Result<bool, isize>
 	{
-		let r = unsafe { base::pa_stream_is_suspended(self.0.as_ptr()) };
+		let r = unsafe { base::pa_stream_is_suspended(self.0) };
 		if r < 0 { Err(r as _) } else { Ok(r == 1) }
 	}
 	pub fn is_corked(&self) -> Result<bool, isize>
 	{
-		let r = unsafe { base::pa_stream_is_corked(self.0.as_ptr()) };
+		let r = unsafe { base::pa_stream_is_corked(self.0) };
 		if r < 0 { Err(r as _) } else { Ok(r == 1) }
 	}
 
@@ -115,7 +138,7 @@ impl Stream
 		let dev_c = dev.map(|n| CString::new(n).unwrap());
 		let r = unsafe
 		{
-			base::pa_stream_connect_playback(self.0.as_ptr(),
+			base::pa_stream_connect_playback(self.0,
 				dev_c.as_ref().map(|cs| cs.as_ptr()).unwrap_or_else(null),
 				attr.map(|p| p as *const _).unwrap_or_else(null),
 				flags,
@@ -126,23 +149,28 @@ impl Stream
 	}
 	pub fn disconnect(&mut self)
 	{
-		unsafe { base::pa_stream_disconnect(self.0.as_ptr()); }
+		unsafe { base::pa_stream_disconnect(self.0); }
 	}
 
-	pub fn set_write_request_callback<F>(&mut self, callback: &mut F) where F: FnMut(usize) + 'static
+	pub fn set_write_request_callback<W>(&mut self, handler: &mut W) where W: WriteRequestHandler
 	{
-		extern "C" fn wcb_wrap<F>(_: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where F: FnMut(usize) + 'static
+		extern "C" fn wcb_wrap<W>(sref: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where W: WriteRequestHandler
 		{
-			unsafe { (*(ctx as *mut F))(nbytes as _); }
+			unsafe { (*(ctx as *mut W)).callback(&StreamRef(sref), nbytes); }
 		}
-		unsafe { base::pa_stream_set_write_callback(self.0.as_ptr(), Some(wcb_wrap::<F>), callback as *mut F as _) }
+		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler as *mut W as _) }
 	}
+}
+
+pub trait WriteRequestHandler
+{
+	fn callback(&mut self, stream: &StreamRef, nbytes: usize);
 }
 
 struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }
 pub struct StreamStateChangeAwaiter<'a>
 {
-	s: &'a mut Stream,
+	s: &'a mut StreamRef,
 	changed: Arc<AtomicBool>,
 	callback_context: Option<Pin<Box<CallbackContext>>>
 }
@@ -166,7 +194,7 @@ impl<'a> std::future::Future for StreamStateChangeAwaiter<'a>
 			}
 			unsafe
 			{
-				base::pa_stream_set_state_callback(self.s.0.as_ptr(), Some(cb_internal), &*cbc as *const _ as *mut _);
+				base::pa_stream_set_state_callback(self.s.0, Some(cb_internal), &*cbc as *const _ as *mut _);
 			}
 			self.get_mut().callback_context = Some(cbc);
 
@@ -174,7 +202,7 @@ impl<'a> std::future::Future for StreamStateChangeAwaiter<'a>
 		}
 		else
 		{
-			unsafe { base::pa_stream_set_state_callback(self.s.0.as_ptr(), None, null_mut()); }
+			unsafe { base::pa_stream_set_state_callback(self.s.0, None, null_mut()); }
 			Poll::Ready(self.s.state())
 		}
 	}
