@@ -166,7 +166,7 @@ impl StreamRef
 		}
 		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_mut() as *mut W as _) }
 	}
-	pub fn begin_write(&mut self) -> Result<(&mut [u8], usize), isize>
+	pub fn begin_write(&mut self) -> Result<&mut [u8], isize>
 	{
 		let (mut buffer, mut nbytes) = (MaybeUninit::uninit(), MaybeUninit::uninit());
 		let r = unsafe { base::pa_stream_begin_write(self.0, buffer.as_mut_ptr(), nbytes.as_mut_ptr()) };
@@ -175,7 +175,7 @@ impl StreamRef
 		{
 			let len: libc::size_t = unsafe { nbytes.assume_init() };
 			let buf_u8 = unsafe { std::slice::from_raw_parts_mut(buffer.assume_init() as *mut u8, len as usize) };
-			Ok((buf_u8, len))
+			Ok(buf_u8)
 		}
 	}
 	pub fn cancel_write(&mut self) -> Result<(), isize>
