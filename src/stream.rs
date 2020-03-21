@@ -113,6 +113,15 @@ impl Stream
 	{
 		unsafe { base::pa_stream_disconnect(self.0.as_ptr()); }
 	}
+
+	pub fn set_write_request_callback<F, T>(&mut self, callback: &mut F) where F: FnMut(usize) + 'static
+	{
+		extern "C" fn wcb_wrap<F>(_: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where F: FnMut(usize) + 'static
+		{
+			unsafe { (*(ctx as *mut F))(nbytes as _); }
+		}
+		unsafe { base::pa_stream_set_write_callback(self.0.as_ptr(), Some(wcb_wrap::<F>), callback as *mut F as _) }
+	}
 }
 
 struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }
