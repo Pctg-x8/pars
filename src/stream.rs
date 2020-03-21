@@ -114,7 +114,7 @@ impl Stream
 		unsafe { base::pa_stream_disconnect(self.0.as_ptr()); }
 	}
 
-	pub fn set_write_request_callback<F, T>(&mut self, callback: &mut F) where F: FnMut(usize) + 'static
+	pub fn set_write_request_callback<F>(&mut self, callback: &mut F) where F: FnMut(usize) + 'static
 	{
 		extern "C" fn wcb_wrap<F>(_: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where F: FnMut(usize) + 'static
 		{
