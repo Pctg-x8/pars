@@ -26,6 +26,10 @@ impl Threaded
 		let rval = unsafe { base::pa_threaded_mainloop_start(self.0.as_ptr()) };
 		if rval < 0 { Err(rval as _) } else { Ok(()) }
 	}
+	pub fn stop(&mut self)
+	{
+		unsafe { base::pa_threaded_mainloop_stop(self.0.as_ptr()); }
+	}
 }
 impl Drop for Threaded
 {

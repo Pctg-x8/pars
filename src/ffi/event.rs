@@ -42,5 +42,6 @@ extern "C"
 	pub fn pa_threaded_mainloop_new() -> *mut pa_threaded_mainloop;
 	pub fn pa_threaded_mainloop_free(m: *mut pa_threaded_mainloop);
 	pub fn pa_threaded_mainloop_start(m: *mut pa_threaded_mainloop) -> c_int;
+	pub fn pa_threaded_mainloop_stop(m: *mut pa_threaded_mainloop);
 	pub fn pa_threaded_mainloop_get_api(m: *mut pa_threaded_mainloop) -> *mut pa_mainloop_api;
 }
