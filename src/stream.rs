@@ -166,14 +166,15 @@ impl StreamRef
 		}
 		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_mut() as *mut W as _) }
 	}
-	pub fn begin_write(&mut self) -> Result<(*mut c_void, usize), isize>
+	pub fn begin_write(&mut self, request_buffer_size: usize) -> Result<(*mut c_void, usize), isize>
 	{
-		let (mut buffer, mut nbytes) = (MaybeUninit::uninit(), MaybeUninit::uninit());
-		let r = unsafe { base::pa_stream_begin_write(self.0, buffer.as_mut_ptr(), nbytes.as_mut_ptr()) };
+		let mut buffer = MaybeUninit::uninit();
+		let mut nbytes: libc::size_t = request_buffer_size as _;
+		let r = unsafe { base::pa_stream_begin_write(self.0, buffer.as_mut_ptr(), &mut nbytes) };
 		if r != 0 { Err(r as _) }
 		else
 		{
-			unsafe { Ok((buffer.assume_init(), nbytes.assume_init() as usize)) }
+			unsafe { Ok((buffer.assume_init(), nbytes as usize)) }
 		}
 	}
 	pub fn cancel_write(&mut self) -> Result<(), isize>
