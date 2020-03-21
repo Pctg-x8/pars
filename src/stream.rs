@@ -187,7 +187,7 @@ impl StreamRef
 		let (seek, offset) = seek_offset.unwrap_or((0, 0));
 		let r = unsafe
 		{
-			base::pa_stream_write(self.0, data.as_ptr() as *const _, data.len() as _, None, offset, seek)
+			base::pa_stream_write(self.0, data.as_ptr() as *const _, std::mem::size_of::<D>() * data.len() as usize, None, offset, seek)
 		};
 		if r != 0 { Err(r as _) } else { Ok(()) }
 	}
