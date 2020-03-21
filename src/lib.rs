@@ -8,4 +8,4 @@ pub mod stream;
 
 pub use self::context::Context;
 pub use self::mainloop::MainloopAPI;
-pub use self::config::{ChannelMap, Sample};
+pub use self::config::{ChannelMap, SampleSpec, SampleFormat};

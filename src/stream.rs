@@ -3,7 +3,7 @@ use crate::ffi as base;
 use std::ptr::{NonNull, null, null_mut};
 use std::mem::transmute;
 use std::ffi::CString;
-use super::{Sample, ChannelMap};
+use super::{SampleSpec, ChannelMap};
 
 #[repr(C)]
 pub enum State
@@ -58,7 +58,7 @@ impl Drop for Stream
 }
 impl super::Context
 {
-	pub fn new_stream(&mut self, name: &str, sample: &Sample, channel_map: Option<&ChannelMap>) -> Option<Stream>
+	pub fn new_stream(&mut self, name: &str, sample: &SampleSpec, channel_map: Option<&ChannelMap>) -> Option<Stream>
 	{
 		let name_c = CString::new(name).unwrap();
 		let p = unsafe
