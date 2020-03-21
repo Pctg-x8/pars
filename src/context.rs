@@ -54,6 +54,7 @@ impl Context
 		let name = CString::new(name).unwrap();
 		NonNull::new(unsafe { base::pa_context_new(mainloop.vtable(), name.as_ptr()) }).map(Self)
 	}
+	pub(crate) fn as_mut_ptr(&mut self) -> *mut base::pa_context { self.0.as_ptr() }
 
 	/*fn set_state_callback<F>(&mut self, callback: Option<Pin<Box<F>>>) where F: FnMut()
 	{
