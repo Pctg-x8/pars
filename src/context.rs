@@ -56,7 +56,7 @@ impl Context
 	}
 	pub(crate) fn as_mut_ptr(&mut self) -> *mut base::pa_context { self.0.as_ptr() }
 
-	/*fn set_state_callback<F>(&mut self, callback: Option<Pin<Box<F>>>) where F: FnMut()
+	pub fn set_state_callback<F>(&mut self, callback: Option<Pin<Box<F>>>) where F: FnMut()
 	{
 		if let Some(cb) = callback
 		{
@@ -70,7 +70,7 @@ impl Context
 		{
 			unsafe { base::pa_context_set_state_callback(self.0.as_ptr(), None, null_mut()); }
 		}
-	}*/
+	}
 
 	pub fn state(&self) -> State
 	{

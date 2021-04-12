@@ -219,10 +219,12 @@ impl<'a> std::future::Future for StreamStateChangeAwaiter<'a>
 			});
 			extern "C" fn cb_internal(_: *mut base::pa_stream, ctx: *mut c_void)
 			{
+				println!("cb_internal");
 				let cbc = unsafe { &mut *(ctx as *mut CallbackContext) };
 				cbc.flag.store(true, Ordering::Release);
 				cbc.mux.take().unwrap().wake();
 			}
+			println!("pa_stream_set_state_callback");
 			unsafe
 			{
 				base::pa_stream_set_state_callback(self.s.0, Some(cb_internal), &*cbc as *const _ as *mut _);
