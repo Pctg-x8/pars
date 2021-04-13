@@ -57,6 +57,42 @@ impl Drop for Threaded
 	}
 }
 
+#[repr(transparent)]
+pub struct LockedLoop<'a>(NonNull<base::pa_threaded_mainloop>, std::marker::PhantomData<&'a Threaded>);
+impl<'a> LockedLoop<'a> {
+	pub fn new(t: &'a Threaded) -> Self {
+		unsafe { base::pa_threaded_mainloop_lock(t.0.as_ptr()) };
+		Self(t.0, std::marker::PhantomData)
+	}
+
+	pub fn start(&mut self) -> Result<(), isize>
+	{
+		let rval = unsafe { base::pa_threaded_mainloop_start(self.0.as_ptr()) };
+		if rval < 0 { Err(rval as _) } else { Ok(()) }
+	}
+	pub fn stop(&mut self)
+	{
+		unsafe { base::pa_threaded_mainloop_stop(self.0.as_ptr()); }
+	}
+
+	pub fn wait(&mut self) {
+		unsafe { base::pa_threaded_mainloop_wait(self.0.as_ptr()); }
+	}
+	pub fn signal(&mut self, wait_for_accept: bool) {
+		unsafe { base::pa_threaded_mainloop_signal(self.0.as_ptr(), if wait_for_accept { 1 } else { 0 }); }
+	}
+}
+impl Drop for LockedLoop<'_> {
+	fn drop(&mut self) {
+		unsafe { base::pa_threaded_mainloop_unlock(self.0.as_ptr()) };
+	}
+}
+impl MainloopAPI for LockedLoop<'_> {
+	fn vtable(&self) -> *mut base::pa_mainloop_api {
+		unsafe { base::pa_threaded_mainloop_get_api(self.0.as_ptr()) }
+	}
+}
+
 pub struct LockedScope<'a>(&'a mut Threaded);
 impl<'a> LockedScope<'a> {
 	pub fn enter(t: &'a mut Threaded) -> Self {

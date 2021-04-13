@@ -52,7 +52,9 @@ pub const SEEK_ABSOLUTE: SeekMode = base::PA_SEEK_ABSOLUTE;
 pub const SEEK_RELATIVE_ON_READ: SeekMode = base::PA_SEEK_RELATIVE_ON_READ;
 pub const SEEK_RELATIVE_END: SeekMode = base::PA_SEEK_RELATIVE_END;
 
+#[repr(transparent)]
 pub struct StreamRef(*mut base::pa_stream);
+#[repr(transparent)]
 pub struct Stream(NonNull<base::pa_stream>);
 impl std::ops::Deref for Stream
 {
@@ -128,6 +130,9 @@ impl StreamRef
 	{
 		unsafe { CStr::from_ptr(base::pa_stream_get_device_name(self.0)).to_str().unwrap() }
 	}
+	pub fn sample_spec(&mut self) -> &SampleSpec {
+		unsafe { &*base::pa_stream_get_sample_spec(self.0) }
+	}
 	pub fn is_suspended(&self) -> Result<bool, isize>
 	{
 		let r = unsafe { base::pa_stream_is_suspended(self.0) };
@@ -158,13 +163,17 @@ impl StreamRef
 		unsafe { base::pa_stream_disconnect(self.0); }
 	}
 
-	pub fn set_write_request_callback<W>(&mut self, handler: Pin<&mut W>) where W: WriteRequestHandler + Unpin
+	pub fn set_state_callback(&mut self, callback: Option<extern "C" fn(*mut base::pa_stream, *mut c_void)>, ctx: *mut c_void) {
+		unsafe { base::pa_stream_set_state_callback(self.0, callback, ctx); }
+	}
+
+	pub fn set_write_request_callback<W>(&mut self, handler: Pin<&W>) where W: WriteRequestHandler + Unpin
 	{
 		extern "C" fn wcb_wrap<W>(sref: *mut base::pa_stream, nbytes: libc::size_t, ctx: *mut c_void) where W: WriteRequestHandler
 		{
-			unsafe { (*(ctx as *mut W)).callback(&mut StreamRef(sref), nbytes); }
+			unsafe { (*(ctx as *const W)).callback(&mut StreamRef(sref), nbytes); }
 		}
-		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_mut() as *mut W as _) }
+		unsafe { base::pa_stream_set_write_callback(self.0, Some(wcb_wrap::<W>), handler.get_ref() as *const W as _) }
 	}
 	pub fn begin_write(&mut self, request_buffer_size: usize) -> Result<(*mut c_void, usize), isize>
 	{
@@ -195,7 +204,12 @@ impl StreamRef
 
 pub trait WriteRequestHandler
 {
-	fn callback(&mut self, stream: &mut StreamRef, nbytes: usize);
+	fn callback(&self, stream: &mut StreamRef, nbytes: usize);
+}
+impl<T> WriteRequestHandler for Arc<T> where T: WriteRequestHandler {
+	fn callback(&self, stream: &mut StreamRef, nbytes: usize) {
+		self.as_ref().callback(stream, nbytes);
+	}
 }
 
 struct CallbackContext { mux: Option<Waker>, flag: Arc<AtomicBool> }

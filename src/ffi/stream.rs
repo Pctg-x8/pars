@@ -67,6 +67,7 @@ extern "C"
 
 	pub fn pa_stream_get_state(s: *const pa_stream) -> pa_stream_state_t;
 	pub fn pa_stream_get_device_name(s: *const pa_stream) -> *const c_char;
+	pub fn pa_stream_get_sample_spec(s: *mut pa_stream) -> *const pa_sample_spec;
 	pub fn pa_stream_connect_playback(s: *mut pa_stream, dev: *const c_char, attr: *const pa_buffer_attr, flags: pa_stream_flags_t, volume: *const pa_cvolume, sync_stream: *mut pa_stream) -> c_int;
 	pub fn pa_stream_disconnect(s: *mut pa_stream);
 

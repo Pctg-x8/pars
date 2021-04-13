@@ -1,5 +1,5 @@
 
-mod ffi;
+pub mod ffi;
 
 pub mod context;
 pub mod mainloop;
