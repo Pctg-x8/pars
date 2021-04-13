@@ -56,7 +56,12 @@ impl Context
 	}
 	pub(crate) fn as_mut_ptr(&mut self) -> *mut base::pa_context { self.0.as_ptr() }
 
-	pub fn set_state_callback<F>(&mut self, callback: Option<&mut Pin<Box<F>>>) where F: FnMut() + Unpin
+	pub fn set_state_callback(
+		&mut self, callback: Option<extern "C" fn(*mut base::pa_context, cb: *mut c_void)>, ext: *mut c_void
+	) {
+		unsafe { base::pa_context_set_state_callback(self.0.as_ptr(), callback, ext); }
+	}
+	pub fn set_state_callback_closure<F>(&mut self, callback: Option<&mut Pin<Box<F>>>) where F: FnMut() + Unpin
 	{
 		if let Some(cb) = callback
 		{
@@ -76,6 +81,7 @@ impl Context
 	{
 		unsafe { transmute(base::pa_context_get_state(self.0.as_ptr())) }
 	}
+	/// Overrides state_callback
 	pub fn await_new_state(&mut self) -> ContextStateChangeAwaiter
 	{
 		ContextStateChangeAwaiter
@@ -85,6 +91,7 @@ impl Context
 			callback_context: None
 		}
 	}
+	/// Overrides state_callback
 	pub async fn await_state_until(&mut self, state: State)
 	{
 		let mut current_st = self.state();
@@ -131,23 +138,17 @@ impl<'a> std::future::Future for ContextStateChangeAwaiter<'a>
 				cbc.flag.store(true, Ordering::Release);
 				cbc.mux.take().unwrap().wake();
 			}
-			unsafe
-			{
-				base::pa_context_set_state_callback(self.c.0.as_ptr(), Some(cb_internal), &*cbc as *const _ as *mut _);
-				println!("set_state_callback in awaiter");
-			}
-			self.get_mut().callback_context = Some(cbc);
+			let selfp = self.get_mut();
+			selfp.c.set_state_callback(Some(cb_internal), &*cbc as *const _ as _);
+			selfp.callback_context = Some(cbc);
 
 			Poll::Pending
 		}
 		else
 		{
-			unsafe
-			{
-				base::pa_context_set_state_callback(self.c.0.as_ptr(), None, null_mut());
-				println!("clear_state_callback in awaiter");
-			}
-			Poll::Ready(self.c.state())
+			let selfp = self.get_mut();
+			selfp.c.set_state_callback(None, null_mut());
+			Poll::Ready(selfp.c.state())
 		}
 	}
 }
