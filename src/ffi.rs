@@ -6,6 +6,7 @@ mod context; pub use self::context::*;
 mod stream; pub use self::stream::*;
 mod sample; pub use self::sample::*;
 mod channelmap; pub use self::channelmap::*;
+mod signal; pub use self::signal::*;
 
 use libc::c_void;
 

@@ -56,7 +56,7 @@ impl Context
 	}
 	pub(crate) fn as_mut_ptr(&mut self) -> *mut base::pa_context { self.0.as_ptr() }
 
-	pub fn set_state_callback<F>(&mut self, callback: Option<Pin<Box<F>>>) where F: FnMut()
+	pub fn set_state_callback<F>(&mut self, callback: Option<&mut Pin<Box<F>>>) where F: FnMut() + Unpin
 	{
 		if let Some(cb) = callback
 		{
@@ -64,7 +64,7 @@ impl Context
 			{
 				unsafe { (*(cb as *mut F))(); }
 			}
-			unsafe { base::pa_context_set_state_callback(self.0.as_ptr(), Some(cb_internal::<F>), &*cb as *const _ as *mut _); }
+			unsafe { base::pa_context_set_state_callback(self.0.as_ptr(), Some(cb_internal::<F>), cb.as_mut().get_mut() as *mut F as *mut _); }
 		}
 		else
 		{
@@ -134,6 +134,7 @@ impl<'a> std::future::Future for ContextStateChangeAwaiter<'a>
 			unsafe
 			{
 				base::pa_context_set_state_callback(self.c.0.as_ptr(), Some(cb_internal), &*cbc as *const _ as *mut _);
+				println!("set_state_callback in awaiter");
 			}
 			self.get_mut().callback_context = Some(cbc);
 
@@ -144,6 +145,7 @@ impl<'a> std::future::Future for ContextStateChangeAwaiter<'a>
 			unsafe
 			{
 				base::pa_context_set_state_callback(self.c.0.as_ptr(), None, null_mut());
+				println!("clear_state_callback in awaiter");
 			}
 			Poll::Ready(self.c.state())
 		}

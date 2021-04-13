@@ -1,10 +1,14 @@
 
-use crate::ffi as base;
+use crate::ffi::{self as base, pa_signal_init};
 use std::ptr::NonNull;
 
 pub trait MainloopAPI
 {
 	fn vtable(&self) -> *mut base::pa_mainloop_api;
+
+	fn init_signal(&self) {
+		unsafe { pa_signal_init(self.vtable()); }
+	}
 }
 
 pub struct Threaded(NonNull<base::pa_threaded_mainloop>);
@@ -30,6 +34,20 @@ impl Threaded
 	{
 		unsafe { base::pa_threaded_mainloop_stop(self.0.as_ptr()); }
 	}
+
+	pub fn lock(&mut self) {
+		unsafe { base::pa_threaded_mainloop_lock(self.0.as_ptr()) }
+	}
+	pub fn unlock(&mut self) {
+		unsafe { base::pa_threaded_mainloop_unlock(self.0.as_ptr()) }
+	}
+
+	pub fn wait(&mut self) {
+		unsafe { base::pa_threaded_mainloop_wait(self.0.as_ptr()); }
+	}
+	pub fn signal(&mut self, wait_for_accept: bool) {
+		unsafe { base::pa_threaded_mainloop_signal(self.0.as_ptr(), if wait_for_accept { 1 } else { 0 }); }
+	}
 }
 impl Drop for Threaded
 {
@@ -37,4 +55,24 @@ impl Drop for Threaded
 	{
 		unsafe { base::pa_threaded_mainloop_free(self.0.as_ptr()); }
 	}
+}
+
+pub struct LockedScope<'a>(&'a mut Threaded);
+impl<'a> LockedScope<'a> {
+	pub fn enter(t: &'a mut Threaded) -> Self {
+		t.lock();
+		Self(t)
+	}
+}
+impl Drop for LockedScope<'_> {
+	fn drop(&mut self) {
+		self.0.unlock();
+	}
+}
+impl std::ops::Deref for LockedScope<'_> {
+	type Target = Threaded;
+	fn deref(&self) -> &Threaded { self.0 }
+}
+impl std::ops::DerefMut for LockedScope<'_> {
+	fn deref_mut(&mut self) -> &mut Threaded { self.0 }
 }
